@@ -15,19 +15,12 @@ jobs:
      - name: Checkout code
        uses: actions/checkout@v3
 
-     # Set up SSH for deployment
+     # Set up SSH for deployment (if needed for a local machine)
      - name: Set up SSH
        uses: webfactory/ssh-agent@v0.5.3
        with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-     # Log in to Docker Hub
-     - name: Log in to Docker Hub
-       uses: docker/login-action@v2
-       with:
-         username: ${{ secrets.DOCKER_USERNAME }}
-         password: ${{ secrets.DOCKER_PASSWORD }}
-         
      # Set branch name
      - name: Set branch name
        id: set-branch
@@ -47,7 +40,20 @@ jobs:
      - name: Build Next.js app
        run: npm run build
 
-     # Build Docker image
+     # Install Docker on the GitHub runner
+     - name: Install Docker
+       run: |
+         sudo apt-get update
+         sudo apt-get install -y docker.io
+         sudo usermod -aG docker $USER
+
+     # Start Docker Desktop (optional step if using Docker Desktop on the CI runner)
+     - name: Start Docker Desktop
+       run: |
+         sudo systemctl start docker
+         sudo systemctl enable docker
+
+     # Build Docker image using local Docker Desktop daemon
      - name: Build Docker image
        run: |
          docker build -t nextjs_app:${{ env.BRANCH_NAME }} .
@@ -56,27 +62,13 @@ jobs:
      - name: Verify Docker images
        run: docker images
 
-      # Force re-login to Docker Hub (if necessary)
-     - name: Force re-login to Docker Hub
+     # Deploy to Docker Desktop (local machine)
+     - name: Deploy Docker container on Docker Desktop
        run: |
-        echo ${{ secrets.DOCKER_PASSWORD }} | docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
+         docker run -d -p 3000:3000 nextjs_app:${{ env.BRANCH_NAME }}
 
-     # Push Docker image to Docker Hub
-     - name: Push Docker image to Docker Hub
-       run: |
-         docker tag nextjs_app:${{ env.BRANCH_NAME }} ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
-         docker push ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
-
-     # Deploy to a remote server
-     - name: Deploy to Remote Server
-       run: |
-         ssh -o StrictHostKeyChecking=no user@172.27.224.1 <<EOF
-         docker pull ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
-         docker run -d -p 3000:3000 ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
-         EOF
-
-     # Verify container is running
+     # Verify container is running on Docker Desktop
      - name: Verify container is running
        run: |
-         CONTAINER_ID=$(docker ps -q -f "ancestor=${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}")
+         CONTAINER_ID=$(docker ps -q -f "ancestor=nextjs_app:${{ env.BRANCH_NAME }}")
          docker logs --tail 100 -f $CONTAINER_ID & sleep 30; kill $!
