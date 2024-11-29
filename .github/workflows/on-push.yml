@@ -3,72 +3,70 @@ name: CI/CD
 on:
   push:
     branches:
-      - main
+      - main 
 
 jobs:
   docker-build:
-   name: Build and Test Docker Image for Selected Branch
-   runs-on: ubuntu-latest
-   
-   steps:
-     # Checkout the repository 
-     - name: Checkout code
-       uses: actions/checkout@v3
+    name: Build and Test Docker Image for Selected Branch
+    runs-on: ubuntu-latest
 
-     # Set up SSH for deployment (if needed for a local machine)
-     - name: Set up SSH
-       uses: webfactory/ssh-agent@v0.5.3
-       with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-     # Set branch name
-     - name: Set branch name
-       id: set-branch
-       run: echo "BRANCH_NAME=${{ github.ref }}" | sed 's|refs/heads/||' >> $GITHUB_ENV
+      # Log in to Docker Hub
+      - name: Log in to Docker Hub 
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-     # Install Node.js and dependencies
-     - name: Set up Node.js
-       uses: actions/setup-node@v3
-       with:
-         node-version: '18'
-         cache: 'npm'
+      # Set up environment variables (for Next.js app, if needed)
+      - name: Set up environment variable for DB connection (if required)
+        run: echo "DB_CONNECTION_STRING=mysql://root:password@172.18.0.2:3306/testdb" >> $GITHUB_ENV
 
-     - name: Install dependencies
-       run: npm install
+      # Set branch name
+      - name: Set branch name
+        id: set-branch
+        run: echo "BRANCH_NAME=${{ github.ref }}" | sed 's|refs/heads/||' >> $GITHUB_ENV
 
-     # Build the Next.js app
-     - name: Build Next.js app
-       run: npm run build
+      # Install Node.js (Next.js needs Node.js environment)
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
 
-     # Install Docker on the GitHub runner
-     - name: Install Docker
-       run: |
-         sudo apt-get update
-         sudo apt-get install -y docker.io
-         sudo usermod -aG docker $USER
+      # Install dependencies (if your Next.js app uses npm/yarn)
+      - name: Install dependencies
+        run: npm install  # Or use `yarn install` if you use Yarn
 
-     # Start Docker Desktop (optional step if using Docker Desktop on the CI runner)
-     - name: Start Docker Desktop
-       run: |
-         sudo systemctl start docker
-         sudo systemctl enable docker
+      # Build the Next.js app
+      - name: Build Next.js app
+        run: npm run build  # Or `yarn build` if you use Yarn
 
-     # Build Docker image using local Docker Desktop daemon
-     - name: Build Docker image
-       run: |
-         docker build -t nextjs_app:${{ env.BRANCH_NAME }} .
+      # Build Docker image for Next.js
+      - name: Build Docker image
+        run: |
+          docker build -t nextjs_app:${{ env.BRANCH_NAME }} .
 
-     # Verify Docker images
-     - name: Verify Docker images
-       run: docker images
+      # Verify Docker images
+      - name: Verify Docker images
+        run: docker images
 
-     # Deploy to Docker Desktop (local machine)
-     - name: Deploy Docker container on Docker Desktop
-       run: |
-         docker run -d -p 3000:3000 nextjs_app:${{ env.BRANCH_NAME }}
+      # Push Docker image to Docker Hub
+      - name: Push Docker image to Docker Hub
+        run: |
+          docker tag nextjs_app:${{ env.BRANCH_NAME }} ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
 
-     # Verify container is running on Docker Desktop
-     - name: Verify container is running
-       run: |
-         CONTAINER_ID=$(docker ps -q -f "ancestor=nextjs_app:${{ env.BRANCH_NAME }}")
-         docker logs --tail 100 -f $CONTAINER_ID & sleep 30; kill $!
+      # Run Docker container with Next.js app
+      - name: Run Docker container
+        run: |
+          docker run --rm -d -p 3000:3000 ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
+
+      # Verify the container is running
+      - name: Verify container is running
+        run: |
+          CONTAINER_ID=$(docker ps -q -f "ancestor=${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}")
+          docker logs --tail 100 -f $CONTAINER_ID & sleep 30; kill $!
