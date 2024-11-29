@@ -3,64 +3,70 @@ name: CI/CD
 on:
   push:
     branches:
-      - main 
+      - main
 
 jobs:
   docker-build:
    name: Build and Test Docker Image for Selected Branch
    runs-on: ubuntu-latest
-   # Ensure this job runs only after docker-compose finishes successfully
- #  needs: docker-compose  
+   
    steps:
+     # Checkout the repository
      - name: Checkout code
        uses: actions/checkout@v3
 
-     - name: Log in to Docker Hub 
+     # Log in to Docker Hub
+     - name: Log in to Docker Hub
        uses: docker/login-action@v2
        with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-     - name: Pull MySQL Docker image
-       run: |
-          docker pull mysql:latest
+         username: ${{ secrets.DOCKER_USERNAME }}
+         password: ${{ secrets.DOCKER_PASSWORD }}
 
-     - name: Run MySQL container
-       run: |
-          docker run --name mysql-container -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=testdb -d -p 3306:3306 mysql:latest
-
-     - name: Wait for MySQL to be ready
-       run: |
-          until docker exec mysql-container mysqladmin --user=root --password=password --host=127.0.0.1 --port=3306 ping --silent; do
-            echo "Waiting for MySQL to be ready..."
-            sleep 5
-          done
-          echo "MySQL is ready!"
-          
+     # Set up environment variable for DB connection
      - name: Set up environment variable for DB connection
-       run: echo "DB_CONNECTION_STRING=mysql+pymysql://root:password@172.18.0.2:3306/testdb" >> $GITHUB_ENV
+       run: echo "DB_CONNECTION_STRING=mysql://root:password@172.18.0.2:3306/testdb" >> $GITHUB_ENV
 
+     # Set branch name
      - name: Set branch name
        id: set-branch
        run: echo "BRANCH_NAME=${{ github.ref }}" | sed 's|refs/heads/||' >> $GITHUB_ENV
-       
+
+     # Install Node.js and dependencies
+     - name: Set up Node.js
+       uses: actions/setup-node@v3
+       with:
+         node-version: '18'
+         cache: 'npm'
+
+     - name: Install dependencies
+       run: npm install
+
+     # Build the Next.js app
+     - name: Build Next.js app
+       run: npm run build
+
+     # Build Docker image
      - name: Build Docker image
        run: |
-        docker build -t fastapi-clean:${{ env.BRANCH_NAME }} .
+         docker build -t nextjs_app:${{ env.BRANCH_NAME }} .
 
+     # Verify Docker images
      - name: Verify Docker images
-       run: |
-        docker images
+       run: docker images
 
+     # Push Docker image to Docker Hub
      - name: Push Docker image to Docker Hub
        run: |
-         docker tag fastapi-clean:${{ env.BRANCH_NAME }} ${{ secrets.DOCKER_USERNAME }}/fastapi-clean:${{ env.BRANCH_NAME }}
-         docker push ${{ secrets.DOCKER_USERNAME }}/fastapi-clean:${{ env.BRANCH_NAME }}
+         docker tag nextjs_app:${{ env.BRANCH_NAME }} ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
+         docker push ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
 
+     # Run Docker container
      - name: Run Docker container
        run: |
-         docker run --rm -d -p 8000:8000 ${{ secrets.DOCKER_USERNAME }}/fastapi-clean:${{ env.BRANCH_NAME }}
+         docker run --rm -d -p 3000:3000 ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
 
+     # Verify container is running
      - name: Verify container is running
-       run: | 
-        CONTAINER_ID=$(docker ps -q -f "ancestor=${{ secrets.DOCKER_USERNAME }}/fastapi-clean:${{ env.BRANCH_NAME }}") 
-        docker logs --tail 100 -f $CONTAINER_ID & sleep 30; kill $!
+       run: |
+         CONTAINER_ID=$(docker ps -q -f "ancestor=${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}")
+         docker logs --tail 100 -f $CONTAINER_ID & sleep 30; kill $!
