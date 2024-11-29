@@ -8,7 +8,7 @@ on:
 jobs:
   docker-build:
     name: Build and Test Docker Image for Selected Branch
-    runs-on: self-hosted
+    runs-on: [self-hosted,windows]
 
     steps:
       # Checkout the repository
