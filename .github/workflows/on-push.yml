@@ -9,14 +9,6 @@ jobs:
   docker-build:
    name: Build and Test Docker Image for Selected Branch
    runs-on: self-hosted
-   container:
-      image: docker:19.03.12  # Docker-in-Docker image
-
-   services:
-      docker:
-        image: docker:19.03.12  # Docker service for Docker-in-Docker
-        options: --privileged
-
 
    steps:
       # Checkout the repository
