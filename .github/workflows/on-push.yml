@@ -37,6 +37,13 @@ jobs:
       - name: Install dependencies
         run: npm install  # Or use `yarn install` if you use Yarn
 
+      - name: Build Docker image
+        run: |
+          docker build -t nextjs_app:${{ env.BRANCH_NAME }} .
+      # Verify Docker images
+      - name: Verify Docker images
+        run: docker images
+
       # Build the Next.js app
       - name: Build Next.js app
         run: npm run build  # Or `yarn build` if you use Yarn
@@ -44,13 +51,13 @@ jobs:
       # Push Docker image to Docker Hub
       - name: Build Docker image and push to Docker Hub
         run: |
-         docker build -t nextjs_app:${{ env.BRANCH_NAME }} .
-         docker push nextjs_app:${{ env.BRANCH_NAME }}
+          docker tag nextjs_app:${{ env.BRANCH_NAME }} ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
 
       # Run Docker container with Next.js app
       - name: Run Docker container
         run: |
-          docker run --rm -d -p --name nextjs_app 3000:3000 nextjs_app:${{ env.BRANCH_NAME }}
+          docker run --rm -d -p 3000:3000 ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
 
       # Verify the container is running
       - name: Verify container is running
