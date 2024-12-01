@@ -44,13 +44,13 @@ jobs:
       # Push Docker image to Docker Hub
       - name: Build Docker image and push to Docker Hub
         run: |
-         docker build -t {{ secrets.DOCKER_USERNAME }}/nextjs_appnextjs_app:${{ env.BRANCH_NAME }} .
-         docker push ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
+         docker build -t nextjs_appnextjs_app:${{ env.BRANCH_NAME }} .
+         docker push nextjs_app:${{ env.BRANCH_NAME }}
          
       # Run Docker container with Next.js app
       - name: Run Docker container
         run: |
-          docker run --rm -d --name nextjs_app -p 3000:3000 ${{ secrets.DOCKER_USERNAME }}/nextjs_app:${{ env.BRANCH_NAME }}
+          docker run --rm -d --name nextjs_app -p 3000:3000 nextjs_app:${{ env.BRANCH_NAME }}
 
       # Verify the container is running
       - name: Verify container is running
